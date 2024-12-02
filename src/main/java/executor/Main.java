@@ -4,56 +4,52 @@ import java.util.*;
 import java.util.concurrent.*;
 
 public class Main {
-    /**
-     * Enumeration of task types.
-     */
-    public enum TaskType {
-        READ,
-        WRITE,
+
+    public static void main(String[] args) throws ExecutionException, InterruptedException {
+        TaskExecutor taskExecutor = new TaskExecutorServiceSynchronized(4);
+        TaskExecutor taskExecutorSemaphore=new TaskExecutorSemaphoreImpl(4);
+     //   startTaskExecutor(taskExecutor);
+        startTaskExecutor(taskExecutorSemaphore);
+
     }
 
-    public interface TaskExecutor {
-        /**
-         * Submit new task to be queued and executed.
-         *
-         * @param task Task to be executed by the executor. Must not be null.
-         * @return Future for the task asynchronous computation result.
-         */
-        <T> Future<T> submitTask(Task<T> task);
-    }
+    public static void startTaskExecutor(TaskExecutor taskExecutor) throws ExecutionException, InterruptedException {
+        TaskGroup group1 = new TaskGroup(UUID.randomUUID());
+        TaskGroup group2 = new TaskGroup(UUID.randomUUID());
 
-    /**
-     * Representation of computation to be performed by the {@link TaskExecutor}.
-     *
-     * @param taskUUID   Unique task identifier.
-     * @param taskGroup  Task group.
-     * @param taskType   Task type.
-     * @param taskAction Callable representing task computation and returning the result.
-     * @param <T>        Task computation result value type.
-     */
-    public record Task<T>(
-            UUID taskUUID,
-            TaskGroup taskGroup,
-            TaskType taskType,
-            Callable<T> taskAction
-    ) {
-        public Task {
-            if (taskUUID == null || taskGroup == null || taskType == null || taskAction == null) {
-                throw new IllegalArgumentException("All parameters must not be null");
-            }
+        List<Future<String>> results = new ArrayList<>();
+
+        for (int i = 1; i <= 5; i++) {
+            int taskId = i;
+            results.add(taskExecutor.submitTask(new Task<>(
+                    UUID.randomUUID(),
+                    group1,
+                    TaskType.WRITE,
+                    () -> {
+                        Thread.sleep(1000);
+                        return "Group1 Task " + taskId + " completed";
+                    }
+            )));
         }
+
+        for (int i = 1; i <= 5; i++) {
+            int taskId = i;
+            results.add(taskExecutor.submitTask(new Task<>(
+                    UUID.randomUUID(),
+                    group2,
+                    TaskType.READ,
+                    () -> {
+                        Thread.sleep(500);
+                        return "Group2 Task " + taskId + " completed";
+                    }
+            )));
+        }
+
+        for (Future<String> result : results) {
+            System.out.println(result.get());
+        }
+
+        taskExecutor.shutdown();
     }
 
-    /**
-     * Task group.
-     *
-     * @param groupUUID Unique group identifier.
-     */
-    public record TaskGroup(UUID groupUUID) {
-        public TaskGroup {
-            if (groupUUID == null) {
-                throw new IllegalArgumentException("All parameters must not be null");
-            }
-        }
-    }
 }
